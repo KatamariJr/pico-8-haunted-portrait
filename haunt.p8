@@ -1,0 +1,363 @@
+pico-8 cartridge // http://www.pico-8.com
+version 16
+__lua__
+--haunted portrait
+--by katamari
+
+--Globals
+sprite_size = 8
+screen_max = 128
+floor_height = 110
+player_left_edge = (screen_max / 2) - (sprite_size * 2)
+player_right_edge = player_left_edge + (sprite_size * 4)
+player_width = player_right_edge - player_left_edge
+players = {}
+enemies = {}
+enemy_spawn_rate = 100
+currentspawntick = enemy_spawn_rate / 2
+max_suspicion = 50
+suspicion_meter_start_loc = 70
+suspicion_meter_end_loc = 110
+suspicion_meter_top_loc = 10
+suspicion_meter_height = 10
+menu = 0
+in_game = 1
+results = 2
+game_over = 3
+currentlevel = 1
+currentstate = in_game
+nextstate = nil
+switchingstate = false
+
+function drawmetasprite(m, h, w, xloc, yloc, flipflag)
+  flipflag = flipflag or 0
+  i = 1
+  xflag = false
+  yflag = false
+  for y = 0, w-1 do
+    for x = 0, h-1 do
+      xflag = false
+      yflag = false
+      
+      if m[i] == nil then
+        spriteid = 3
+      elseif type(m[i]) == "table" then
+        spriteid = m[i].id
+        xflag = band(m[i].flag, 1) == 1
+        yflag = band(m[i].flag, 2) == 2
+      else spriteid = m[i] end
+        
+      spr(spriteid, xloc + (sprite_size * x), yloc + (sprite_size * y), 1, 1, xflag, yflag)
+      i = i + 1
+    end
+  end
+end
+
+
+function debug(x,y)
+  print(dbg,x,y)
+end
+
+function tostring(any)
+  if type(any)=="function" then return "function" end
+  if any==nil then return "nil" end
+  if type(any)=="string" then return any end
+  if type(any)=="boolean" then return any and "true" or "false" end
+  if type(any)=="number" then return ""..any end
+  if type(any)=="table" then -- recursion
+    local str = "{ "
+    for k,v in pairs(any) do
+      str=str..tostring(k).."->"..tostring(v).." "
+    end
+    return str.."}"
+  end
+  return "unkown" -- should never show
+end
+
+function setcontains(set, key)
+    return set[key] ~= nil
+end
+
+--Game
+function _init()
+  players = {initplayer()}
+  x = rnd(x_max)
+  y = rnd(y_max)
+  
+end
+
+function _update()
+  for key,val in pairs(players) do
+    updateplayer(val)
+    if setcontains(val, "curranim") then
+      updateanim(val.curranim)
+    end
+  end
+  
+  for key,val in pairs(enemies) do
+    updateenemy(val)
+    if setcontains(val, "curranim") then
+      updateanim(val.curranim)
+    end
+  end
+  
+  currentspawntick = currentspawntick + 1
+  if (currentspawntick >= enemy_spawn_rate) then
+    add(enemies, spawnenemy())
+    currentspawntick = 0
+  end
+  
+end
+
+function _draw()
+  cls()
+  color(5)
+  for key,val in pairs(players) do
+    drawplayer(val)
+  end
+  
+  for key,val in pairs(enemies) do
+    drawenemy(val)
+  end
+  
+  if (switchingstate and nextstate == game_over) then
+    print("u lose",10,10, 12)
+  end
+  
+  color(6)
+  
+  
+  rectfill(0, floor_height, screen_max, screen_max)
+  
+  color(12)
+  debug(0,120)
+end
+
+
+
+function switchstate(nextstate)
+  switchingstate = true
+  nextstate = nextstate
+end
+
+function stateswitchcomplete()
+  switchingstate = false
+  currentstate = nextstate
+  nextstate = nil
+end
+
+--Menu
+function updentity()
+end
+
+function drwentity()
+end
+
+--Player
+function updateplayer(p)
+  if (p.suspicion >= max_suspicion ) then
+    switchstate(game_over)
+  end
+  
+  if(btn(4,p.playernum)) then
+    p.state = 0
+  end
+  if(btn(5,p.playernum)) then
+    p.state = 1
+  end
+  
+  for key,val in pairs(enemies) do
+    if (val.x > player_left_edge and val.x < player_right_edge) and p.state == scaring then
+      scareenemy(val, p)
+    end
+  end
+  
+  
+end
+
+function drawplayer(p)
+  
+  meta = {};
+  if (p.state == 0) then
+    meta = { nil, 4, 5, 6,
+             nil,20,21,22,
+             nil,36,37,38,
+             nil,52,53,54}
+  elseif (p.state == 1) then
+    meta = { nil,  7,  8,nil,
+             nil, 20, 21,nil,
+             nil,  9, 10,nil,
+             nil,nil,nil,nil}
+  end
+  drawmetasprite(meta, 4, 4, player_left_edge, 64  - (sprite_size * 4))
+  
+  
+  frame= { {id=11, flag=0}, {id=12, flag=0}, {id=12, flag=0}, {id=11, flag=1},
+           {id=13, flag=0},             nil,             nil, {id=13, flag=1},
+           {id=13, flag=0},             nil,             nil, {id=13, flag=1},
+           {id=11, flag=2}, {id=12, flag=2}, {id=12, flag=2}, {id=11, flag=3}}
+           
+  drawmetasprite(frame, 4, 4, player_left_edge, 64  - (sprite_size * 4))
+  
+  color(6)
+  rectfill(suspicion_meter_start_loc-1, suspicion_meter_top_loc-1, suspicion_meter_end_loc+1, suspicion_meter_top_loc + suspicion_meter_height+1)
+  color(1)
+  rectfill(suspicion_meter_start_loc, suspicion_meter_top_loc, suspicion_meter_end_loc, suspicion_meter_top_loc + suspicion_meter_height)
+  color(2)
+  fillamt = (suspicion_meter_end_loc - suspicion_meter_start_loc) * (p.suspicion / max_suspicion) 
+  rectfill(suspicion_meter_start_loc, suspicion_meter_top_loc, suspicion_meter_start_loc + fillamt, suspicion_meter_top_loc + suspicion_meter_height)
+  
+end
+
+neutral = 0
+scaring = 1
+
+function initplayer()
+  player = {x = player_left_edge, y = 0, state = 0, suspicion = 0, playernum = 0}
+  return player
+end
+
+--Enemy
+function updateenemy(e)
+  if (e.x <= 0 - sprite_size or e.x >= screen_max + sprite_size) and not e.isspawning then
+    del(enemies, e)
+  end
+  
+  if (e.x >0 and e.x < screen_max) then
+    e.isspawning = false
+  end
+    
+  e.x += (e.incr * e.speed)
+  
+end
+
+function scareenemy(e, p)
+  if e.type == baddie then
+    p.suspicion = p.suspicion + 1
+  else del(enemies,e) end
+    
+end
+ 
+
+function drawenemy(e)
+    drawmetasprite(getcurrentsprite(e.curranim), 1, 2, e.x, floor_height - (sprite_size*2), 0)
+  --debug
+  --[[
+  print(e.x, 10, 10)
+  print(e.incr, 10, 20)
+  --]]
+end
+
+baddie = 0
+goodie = 1
+left = 0
+right = 1
+
+function spawnenemy(e)
+  if e == nil then
+    --random enemy
+    e_type = flr(rnd(2))
+  else
+    e_type = e
+  end
+  
+  enemy = {type = e_type, incr = _pickdirection(flr(rnd(2))), speed = (rnd(2)+0.5), angry = false, isspawning = true}
+  
+  if e_type == baddie then 
+    enemy.sprite = 0 
+    enemy.curranim = baddieanim()
+  elseif e_type == goodie then 
+    enemy.sprite = 1 
+    enemy.curranim = goodieanim()
+  end
+  
+  if enemy.incr == 1 then
+    enemy.x = 0 - sprite_size
+  else 
+    enemy.x = screen_max + sprite_size
+  end
+  return enemy
+end
+
+function _pickdirection(i)
+  if i == 0 then
+    return -1
+  end
+  return i
+end
+
+
+function goodieanim()
+  frameseq = { {32, 48}, {33,49}}
+  return initanim(frameseq, 8)
+end
+
+function baddieanim()
+  frameseq = { {34, 50}, {35,51}}
+  return initanim(frameseq, 8)
+end
+
+--Anim
+function initanim(frameseq,speed,loop)
+  --speed is in fps
+  loop = loop or true
+  anim = {frameseq = frameseq, frameseqlen = #frameseq, speed = speed, xflip = false, yflip = false, frame = 1, step = 1, loop=loop}
+  anim.steprate = 30/speed
+  return anim
+end
+
+function flipanimx(anim)
+  
+end
+
+function updateanim(anim)
+  if(anim.step % anim.steprate == 0) then anim.frame+=1 end
+  if(anim.frame > anim.frameseqlen) then anim.frame=1 end
+  anim.step = anim.step + 1
+end
+
+function getcurrentsprite(anim)
+  return anim.frameseq[anim.frame]
+end
+
+__gfx__
+88888888000000006666666600000000000000000000000000000000000000000000000000000000000000004944944444944424940000000000000000000000
+88888888000000006000000600000000000000000000000000000000000000000000000000000000000000004414442444441449420000000000000000000000
+88888888000000006990009600000000000000000000000000000000000000000000000000000000000000004400000000000000440000000000000000000000
+88888888000000006000000600000000060000000000000000000000000000000000000000000000000000002400000000000000410000000000000000000000
+88888888000000006000000600000000660000000000600000000000000000000000000000000000000000004400000000000000940000000000000000000000
+88888888000000006999009600000000000000000000666600000000000000000000000000000000000000009400000000000000940000000000000000000000
+88888888000000006009999600000000000000000000000000000000000000000000000000000000000000001400000000000000440000000000000000000000
+88888888000000006666666600000000000000000000000000000000000000000000000000000000000000004400000000000000140000000000000000000000
+000000000000000000000000000000000aaa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000aa0aa0000000aaaa00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000a000a000000a000a00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000a000a000000a000a00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000a000a0000000a00a00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000aaa0a0000000aa0a00000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000aaa000000000aa00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000888800088d8800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0bbbbbb00bbbbbb0883ddd8882d3dd88000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0bbbbbb00bbbbbb082d2dd888dd88888000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0b3333300b3333308dd8882888888a28000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0b3333300b333330888aaa8888aaaa88000a00000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0bbbbbb00bbbbbb08aaaaaa88aaaaaa8000a00000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00033000000330008aaaaaa889aaaa980000a000000a000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000330000003300009aaaa90069999900000aaaaaaaa000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00666600006666000699999006111160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00666600006666000611116006111160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00666600006666000611116006117777000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00666600006666000611777706111770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06060060060060600666677006666660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06056606060600600660066006600660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06000006660600606660066006600660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+60000000000000600600066606606600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+__map__
+1a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+1a1a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000f1a000f000f0f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0f0f0f0f0f0f0f0f0f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0f0f0f0f0f0f0f0f0f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0f0f0f0f0f0f0f0f0f1a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0f0f0f0f0f0f0f0f1a1a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

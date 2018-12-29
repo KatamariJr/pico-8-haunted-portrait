@@ -1,0 +1,372 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<project version="1">
+  <game>
+    <name>Haunted Portrait</name>
+    <author>Katamari</author>
+    <cart>C:\Users\Katamari\Documents\pico-8\haunted_portrait\haunt.p8</cart>
+  </game>
+  <entities>
+    <entity name="Notes" enabled="0">
+      <function name="ideas" enabled="0">multiple different types of paintings that scare people different amounts
+bind them to arrow keys
+start with just two but then add 5 more as the game progresses. arcade style levels</function>
+      <function name="todo" enabled="0">todo
+
+  1. 
+  2. </function>
+      <function name="sprites" enabled="1">unlisted ids are free
+
+000. enemy
+
+002. enemy
+003. BLANK ON PURPOSE, DO NOT OVERWRITE
+004. portrait1
+005. portrait1
+
+011. frame
+012. frame
+013. frame
+
+
+020. portrait1
+021. portrait1
+
+032. goodie anim1
+033. goodie anim2
+034. baddie anim1
+035. baddie anim2
+
+036. portrait1
+037. portrait1
+
+048. goodie anim1
+049. goodie anim2
+050. baddie anim1
+051. baddie anim2</function>
+    </entity>
+    <entity name="Globals" enabled="1">
+      <function name="globals" enabled="1">SPRITE_SIZE = 8
+SCREEN_MAX = 128
+FLOOR_HEIGHT = 110
+PLAYER_LEFT_EDGE = (SCREEN_MAX / 2) - (SPRITE_SIZE * 2)
+PLAYER_RIGHT_EDGE = PLAYER_LEFT_EDGE + (SPRITE_SIZE * 4)
+PLAYER_WIDTH = PLAYER_RIGHT_EDGE - PLAYER_LEFT_EDGE
+players = {}
+enemies = {}
+ENEMY_SPAWN_RATE = 100
+currentSpawnTick = ENEMY_SPAWN_RATE / 2
+MAX_SUSPICION = 50
+SUSPICION_METER_START_LOC = 70
+SUSPICION_METER_END_LOC = 110
+SUSPICION_METER_TOP_LOC = 10
+SUSPICION_METER_HEIGHT = 10
+MENU = 0
+IN_GAME = 1
+RESULTS = 2
+GAME_OVER = 3
+currentLevel = 1
+currentState = IN_GAME
+nextState = nil
+switchingState = false</function>
+      <function name="util" enabled="1">function drawMetasprite(m, h, w, xloc, yloc, flipFlag)
+  flipFlag = flipFlag or 0
+  i = 1
+  xflag = false
+  yflag = false
+  for y = 0, w-1 do
+    for x = 0, h-1 do
+      xflag = false
+      yflag = false
+      
+      if m[i] == nil then
+        spriteID = 3
+      elseif type(m[i]) == "table" then
+        spriteID = m[i].id
+        xflag = band(m[i].flag, 1) == 1
+        yflag = band(m[i].flag, 2) == 2
+      else spriteID = m[i] end
+        
+      spr(spriteID, xloc + (SPRITE_SIZE * x), yloc + (SPRITE_SIZE * y), 1, 1, xflag, yflag)
+      i = i + 1
+    end
+  end
+end
+
+
+function debug(x,y)
+  print(dbg,x,y)
+end
+
+function tostring(any)
+  if type(any)=="function" then return "function" end
+  if any==nil then return "nil" end
+  if type(any)=="string" then return any end
+  if type(any)=="boolean" then return any and "true" or "false" end
+  if type(any)=="number" then return ""..any end
+  if type(any)=="table" then -- recursion
+    local str = "{ "
+    for k,v in pairs(any) do
+      str=str..tostring(k).."-&gt;"..tostring(v).." "
+    end
+    return str.."}"
+  end
+  return "unkown" -- should never show
+end
+
+function setContains(set, key)
+    return set[key] ~= nil
+end</function>
+    </entity>
+    <entity name="Game" enabled="1">
+      <function name="_init" enabled="1">function _init()
+  players = {initPlayer()}
+  x = rnd(X_MAX)
+  y = rnd(Y_MAX)
+  
+end</function>
+      <function name="_update" enabled="1">function _update()
+  for key,val in pairs(players) do
+    updatePlayer(val)
+    if setContains(val, "currAnim") then
+      updateAnim(val.currAnim)
+    end
+  end
+  
+  for key,val in pairs(enemies) do
+    updateEnemy(val)
+    if setContains(val, "currAnim") then
+      updateAnim(val.currAnim)
+    end
+  end
+  
+  currentSpawnTick = currentSpawnTick + 1
+  if (currentSpawnTick &gt;= ENEMY_SPAWN_RATE) then
+    add(enemies, spawnEnemy())
+    currentSpawnTick = 0
+  end
+  
+end</function>
+      <function name="_draw" enabled="1">function _draw()
+  cls()
+  color(5)
+  for key,val in pairs(players) do
+    drawPlayer(val)
+  end
+  
+  for key,val in pairs(enemies) do
+    drawEnemy(val)
+  end
+  
+  if (switchingState and nextState == GAME_OVER) then
+    print("u lose",10,10, 12)
+  end
+  
+  color(6)
+  
+  
+  rectfill(0, FLOOR_HEIGHT, SCREEN_MAX, SCREEN_MAX)
+  
+  color(12)
+  debug(0,120)
+end
+
+</function>
+      <function name="state" enabled="1">function switchState(nextState)
+  switchingState = true
+  nextState = nextState
+end
+
+function stateSwitchComplete()
+  switchingState = false
+  currentState = nextState
+  nextState = nil
+end</function>
+    </entity>
+    <entity name="Menu" enabled="1">
+      <function name="update" enabled="1">function updEntity()
+end</function>
+      <function name="draw" enabled="1">function drwEntity()
+end</function>
+    </entity>
+    <entity name="Player" enabled="1">
+      <function name="update" enabled="1">function updatePlayer(p)
+  if (p.suspicion &gt;= MAX_SUSPICION ) then
+    switchState(GAME_OVER)
+  end
+  
+  if(btn(4,p.playerNum)) then
+    p.state = 0
+  end
+  if(btn(5,p.playerNum)) then
+    p.state = 1
+  end
+  
+  for key,val in pairs(enemies) do
+    if (val.x &gt; PLAYER_LEFT_EDGE and val.x &lt; PLAYER_RIGHT_EDGE) and p.state == SCARING then
+      scareEnemy(val, p)
+    end
+  end
+  
+  
+end</function>
+      <function name="draw" enabled="1">function drawPlayer(p)
+  
+  meta = {};
+  if (p.state == 0) then
+    meta = { nil, 4, 5, 6,
+             nil,20,21,22,
+             nil,36,37,38,
+             nil,52,53,54}
+  elseif (p.state == 1) then
+    meta = { nil,  7,  8,nil,
+             nil, 20, 21,nil,
+             nil,  9, 10,nil,
+             nil,nil,nil,nil}
+  end
+  drawMetaSprite(meta, 4, 4, PLAYER_LEFT_EDGE, 64  - (SPRITE_SIZE * 4))
+  
+  
+  frame= { {id=11, flag=0}, {id=12, flag=0}, {id=12, flag=0}, {id=11, flag=1},
+           {id=13, flag=0},             nil,             nil, {id=13, flag=1},
+           {id=13, flag=0},             nil,             nil, {id=13, flag=1},
+           {id=11, flag=2}, {id=12, flag=2}, {id=12, flag=2}, {id=11, flag=3}}
+           
+  drawMetaSprite(frame, 4, 4, PLAYER_LEFT_EDGE, 64  - (SPRITE_SIZE * 4))
+  
+  color(6)
+  rectfill(SUSPICION_METER_START_LOC-1, SUSPICION_METER_TOP_LOC-1, SUSPICION_METER_END_LOC+1, SUSPICION_METER_TOP_LOC + SUSPICION_METER_HEIGHT+1)
+  color(1)
+  rectfill(SUSPICION_METER_START_LOC, SUSPICION_METER_TOP_LOC, SUSPICION_METER_END_LOC, SUSPICION_METER_TOP_LOC + SUSPICION_METER_HEIGHT)
+  color(2)
+  fillAmt = (SUSPICION_METER_END_LOC - SUSPICION_METER_START_LOC) * (p.suspicion / MAX_SUSPICION) 
+  rectfill(SUSPICION_METER_START_LOC, SUSPICION_METER_TOP_LOC, SUSPICION_METER_START_LOC + fillAmt, SUSPICION_METER_TOP_LOC + SUSPICION_METER_HEIGHT)
+  
+end</function>
+      <function name="init" enabled="1">NEUTRAL = 0
+SCARING = 1
+
+function initPlayer()
+  player = {x = PLAYER_LEFT_EDGE, y = 0, state = 0, suspicion = 0, playerNum = 0}
+  return player
+end</function>
+    </entity>
+    <entity name="Enemy" enabled="1">
+      <function name="update" enabled="1">function updateEnemy(e)
+  if (e.x &lt;= 0 - SPRITE_SIZE or e.x &gt;= SCREEN_MAX + SPRITE_SIZE) and not e.isSpawning then
+    del(enemies, e)
+  end
+  
+  if (e.x &gt;0 and e.x &lt; SCREEN_MAX) then
+    e.isSpawning = false
+  end
+    
+  e.x += (e.incr * e.speed)
+  
+end
+
+function scareEnemy(e, p)
+  if e.type == BADDIE then
+    p.suspicion = p.suspicion + 1
+  else del(enemies,e) end
+    
+end
+ </function>
+      <function name="draw" enabled="1">function drawEnemy(e)
+    drawMetaSprite(getCurrentSprite(e.currAnim), 1, 2, e.x, FLOOR_HEIGHT - (SPRITE_SIZE*2), 0)
+  --debug
+  --[[
+  print(e.x, 10, 10)
+  print(e.incr, 10, 20)
+  --]]
+end</function>
+      <function name="spawn" enabled="1">BADDIE = 0
+GOODIE = 1
+LEFT = 0
+RIGHT = 1
+
+function spawnEnemy(e)
+  if e == nil then
+    --random enemy
+    e_type = flr(rnd(2))
+  else
+    e_type = e
+  end
+  
+  enemy = {type = e_type, incr = _pickDirection(flr(rnd(2))), speed = (rnd(2)+0.5), angry = false, isSpawning = true}
+  
+  if e_type == BADDIE then 
+    enemy.sprite = 0 
+    enemy.currAnim = baddieAnim()
+  elseif e_type == GOODIE then 
+    enemy.sprite = 1 
+    enemy.currAnim = goodieAnim()
+  end
+  
+  if enemy.incr == 1 then
+    enemy.x = 0 - SPRITE_SIZE
+  else 
+    enemy.x = SCREEN_MAX + SPRITE_SIZE
+  end
+  return enemy
+end
+
+function _pickDirection(i)
+  if i == 0 then
+    return -1
+  end
+  return i
+end
+</function>
+      <function name="anim" enabled="1">function goodieAnim()
+  frameSeq = { {32, 48}, {33,49}}
+  return initAnim(frameSeq, 8)
+end
+
+function baddieAnim()
+  frameSeq = { {34, 50}, {35,51}}
+  return initAnim(frameSeq, 8)
+end</function>
+    </entity>
+    <entity name="debug" enabled="0">
+      <function name="init" enabled="1">enemy = {}
+function _init()
+  enemy = spawnEnemy(GOODIE)
+  frameSeq = { {32, 48}, {33,49}}
+  enemy.anim = initAnim(frameSeq, 10)
+end</function>
+      <function name="update" enabled="1">function _update()
+  updateAnim(enemy.anim)
+end</function>
+      <function name="draw" enabled="1">function _draw()
+  cls()
+  
+  drawMetaSprite(getCurrentSprite(enemy.anim), 1, 2, 64, FLOOR_HEIGHT - (SPRITE_SIZE*2))
+  
+  
+  debug(0,120)
+end</function>
+    </entity>
+    <entity name="Anim" enabled="1">
+      <function name="init" enabled="1">function initAnim(frameSeq,speed,loop)
+  --speed is in fps
+  loop = loop or true
+  anim = {frameSeq = frameSeq, frameSeqLen = #frameSeq, speed = speed, xFlip = false, yFlip = false, frame = 1, step = 1, loop=loop}
+  anim.stepRate = 30/speed
+  return anim
+end
+
+function flipAnimX(anim)
+  
+end</function>
+      <function name="update" enabled="1">function updateAnim(anim)
+  if(anim.step % anim.stepRate == 0) then anim.frame+=1 end
+  if(anim.frame &gt; anim.frameSeqLen) then anim.frame=1 end
+  anim.step = anim.step + 1
+end
+
+function getCurrentSprite(anim)
+  return anim.frameSeq[anim.frame]
+end</function>
+    </entity>
+  </entities>
+</project>
